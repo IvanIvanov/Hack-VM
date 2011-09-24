@@ -801,7 +801,7 @@ def GenerateAsm(decorated_program_commands):
 
   Args:
     decorated_program_commands: A list of (command, program_name,
-    enclosing_function, line_number) tuples.
+        enclosing_function, line_number) tuples.
 
   Returns:
     A list of lists containing Hack assembly instruction strings.
@@ -812,7 +812,7 @@ def GenerateAsm(decorated_program_commands):
 
 
 def FlattenAsm(asm_chunks):
-  """Flattens a list of lists with Hack assembly instruct.
+  """Flattens a list of lists with Hack assembly instructions.
 
   Args:
     asm_chunks: A list of lists with Hack assembly instruction strings.
