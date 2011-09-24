@@ -23,7 +23,7 @@
 
 """
 This module implements the virtual machine for the Hack platform described in
-chapter 6 and chapter 7 of the book "The Elements of Computing Systems:
+chapter 7 and chapter 8 of the book "The Elements of Computing Systems:
 Building a Modern Computer from First Principles"
 (http://www1.idc.ac.il/tecs/).
 """
@@ -35,6 +35,10 @@ __author__ = "Ivan Vladimirov Ivanov (ivan.vladimirov.ivanov@gmail.com)"
 import os
 import re
 import sys
+
+
+# The following classes model the hack virtual machine commands.
+
 
 class AddCommand(object): pass
 
@@ -119,6 +123,11 @@ class VMError(Exception):
 
 
 class HackParser(object):
+  """This class is responsible for all parsing logic.
+
+  Parsing means converting a string representation of a program line into an
+  instance of one of the command types, an EmptyCommand or and ErrorCommand.
+  """
 
   _SEGMENT_NAMES = [
       "argument",
@@ -131,6 +140,7 @@ class HackParser(object):
       "temp"
   ]
 
+  # specifies the order in which commands will attempt to be parsed.
   _COMMAND_PARSE_ORDER = [
       AddCommand,
       SubCommand,
@@ -159,6 +169,14 @@ class HackParser(object):
 
   @staticmethod
   def ParseCommand(line):
+    """Parses a program line.
+
+    Args:
+      line: A string with the line to be parsed.
+
+    Returns:
+      An instance of one of the command types or an instance ErrorCommand.
+    """
     line = HackParser._TrimProgramLine(line)
     for command in HackParser._COMMAND_PARSE_ORDER:
       result = getattr(HackParser, "Parse" + command.__name__)(line)
@@ -292,7 +310,17 @@ class HackParser(object):
 
 
 class HackCodeGenerator(object):
+  """This class is responsible for generating Hack assembly code.
 
+  The code generation works by transforming a Hack virtual machine command
+  instance into a list of hack assembly instructions. This process sometimes
+  requires the generation of context dependent assembly labels. To facilitate
+  this the code generators require extra inputs: the name of the file in which
+  the Hack virtual machine command resides, the name of the enclosing function,
+  and the line number of the command. 
+  """
+
+  # Mapping from names to the addresses in RAM that represent them.
   _SEGMENT_MAPPING = {
       "sp": 0,
       "temp": 5,
@@ -306,6 +334,17 @@ class HackCodeGenerator(object):
 
   @staticmethod
   def GenerateAsm(command, name, function_name, number):
+    """Transforms a VM command into a list of Hack assembly instructions.
+
+    Args:
+      command: An instance of one of the command types.
+      name: The name of the file in which the command resides.
+      function_name: The name of the function in which the command is found.
+      number: The line number of the command.
+
+    Returns:
+      A list of strings containing the assembly instructions for the command.
+    """
     generator = getattr(
         HackCodeGenerator, "GenerateAsm" + command.__class__.__name__)
     return generator(command, name, function_name, number)
@@ -694,6 +733,18 @@ class HackCodeGenerator(object):
 
 
 def ParseProgram(program_lines, program_name):
+  """Transforms the lines of a VM program to a list of parsed commands.
+
+  Args:
+    program_line: A list of strings with the VM program.
+    program_name: the name of the file containing the program.
+
+  Returns:
+    A list of parsed commands.
+
+  Raises:
+    VMError: If parsing results in an ErrorCommand.
+  """
   program_commands = map(HackParser.ParseCommand, program_lines)
   
   errors = []
@@ -710,6 +761,15 @@ def ParseProgram(program_lines, program_name):
 
 
 def IdentifyParentFunctions(program_commands):
+  """Returns a list of enclosing functions for the program_commands.
+
+  Args:
+    program_commands: A list of command type instances.
+
+  Returns:
+    A list of strings with one element for each element of program_commands.
+    This element is the name of the enclosing function for the command.
+  """
   parent_functions = []
   current_function = "DEFAULT_FUNCTION"
   for command in program_commands:
@@ -720,6 +780,15 @@ def IdentifyParentFunctions(program_commands):
 
 
 def DecorateCommands(program_commands, program_name):
+  """Decorates a list of program commands.
+
+  Args:
+    program_commands: A list of command type instances.
+    program_name: The name of the file containing the commands.
+
+  Returns:
+    A list of (command, program_name, enclosing_function, line_number) tuples.
+  """
   return zip(
       program_commands,
       [program_name] * len(program_commands),
@@ -728,16 +797,42 @@ def DecorateCommands(program_commands, program_name):
 
 
 def GenerateAsm(decorated_program_commands):
+  """Transforms the command list into a list of assembly instruction lists.
+
+  Args:
+    decorated_program_commands: A list of (command, program_name,
+    enclosing_function, line_number) tuples.
+
+  Returns:
+    A list of lists containing Hack assembly instruction strings.
+  """
   return map(
       lambda c: HackCodeGenerator.GenerateAsm(c[0], c[1], c[2], c[3]),
       decorated_program_commands)
 
 
 def FlattenAsm(asm_chunks):
+  """Flattens a list of lists with Hack assembly instruct.
+
+  Args:
+    asm_chunks: A list of lists with Hack assembly instruction strings.
+
+  Returns:
+    A list of Hack assembly instruction strings.
+  """
   return sum(asm_chunks, [])
 
 
 def AssembleProgram(program_lines, program_name):
+  """Transforms the lines of a VM program into a list of assembly instructions.
+
+  Args:
+    program_lines: A list of strings representing the lines of a VM program.
+    program_name: The name of the file that contains the program.
+
+  Returns:
+    A list of Hack assembly instruction strings.
+  """
   return FlattenAsm(
       GenerateAsm(
           DecorateCommands(
@@ -746,12 +841,31 @@ def AssembleProgram(program_lines, program_name):
 
 
 def LinkPrograms(programs):
+  """Transforms a list of VM programs into a single Hack assembly stream.
+
+  Args:
+    programs: A list of Hack VM programs. A Hack VM program is a
+        (program_name, program_lines) tuple, with program_name being the
+        name of the program and program_lines being a list of strings
+        with the programs commands.
+
+  Returns:
+    A list of Hack assembly instruction strings.
+  """
   return sum(
       map(lambda p: AssembleProgram(p[1], p[0]), programs),
       [])
 
 
 def AttachBootstrapCode(program_asm):
+  """Attaches a bootstrap header to a list of Hack assembly instructions.
+
+  Args:
+    program_asm: A list of Hack assembly strings.
+
+  Returns:
+    A list of Hack assembly strings with a bootstrap header.
+  """
   return sum([HackCodeGenerator.GenerateBootstrapAsm(), program_asm], [])
 
 
