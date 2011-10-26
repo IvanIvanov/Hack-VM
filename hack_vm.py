@@ -443,7 +443,7 @@ class HackCodeGenerator(object):
   @staticmethod
   def GenerateAsmCallCommand(command, name, function_name, number):
     goto_name = command.function_name
-    return_address = "%s$%d$return-address" % (name, number)
+    return_address = "%s$%d$return_address" % (name, number)
     return sum([
         HackCodeGenerator._PushConstant(return_address),
         HackCodeGenerator._PushFromMemory(
